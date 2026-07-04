@@ -118,6 +118,10 @@ class SocketService {
       this.emitEvent('error', error);
     });
 
+    this.socket.on('online-status-confirmed', (data) => {
+      this.emitEvent('online-status-confirmed', data);
+    });
+
     // Add this to the setupDefaultListeners method in socket.js
     this.socket.on('game-request-sent', (data) => {
       this.emitEvent('game-request-sent', data);
@@ -131,6 +135,8 @@ class SocketService {
     this.socket.on('game-request-failed', (data) => {
       this.emitEvent('game-request-failed', data);
     });
+
+
   }
 
   // Emit event to server

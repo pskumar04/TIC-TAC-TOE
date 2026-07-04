@@ -32,8 +32,8 @@ const OnlineGame = () => {
   const [isSocketReady, setIsSocketReady] = useState(false);
   const timerRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
 
-  // Get user ID safely
   const getUserId = () => {
     return user?.id || user?._id;
   };
@@ -53,7 +53,7 @@ const OnlineGame = () => {
     const userId = getUserId();
     if (!userId) return;
 
-    console.log(`🔌 Connecting socket for user: ${userId}`);
+    console.log(`🔌 Setting up socket connection for user: ${userId}`);
 
     // Connect to socket
     socketService.connect(userId);
@@ -64,28 +64,35 @@ const OnlineGame = () => {
       if (socketService.isSocketConnected()) {
         socketService.emit('user-online', userId);
         console.log(`👤 Emitted user-online for ${userId}`);
+        reconnectAttemptsRef.current = 0;
+      } else {
+        console.log('⚠️ Socket not connected, attempting reconnect...');
+        reconnectAttemptsRef.current += 1;
+        if (reconnectAttemptsRef.current < 5) {
+          setTimeout(() => {
+            socketService.connect(userId);
+            setTimeout(emitUserOnline, 500);
+          }, 2000);
+        }
       }
     };
 
-    // Emit immediately
+    // Emit immediately and after delays
     emitUserOnline();
-
-    // Re-emit after a short delay to ensure connection is established
-    setTimeout(emitUserOnline, 500);
-    setTimeout(emitUserOnline, 1500);
+    setTimeout(emitUserOnline, 1000);
+    setTimeout(emitUserOnline, 3000);
 
     // ========== SOCKET EVENT LISTENERS ==========
     
-    // Listen for online users - THIS IS THE KEY FIX
+    // Listen for online users - THIS IS THE KEY
     const unsubscribeOnline = socketService.on('online-users', (users) => {
-      console.log(`📡 Received online users:`, users);
+      console.log(`📡 Received ${users.length} online users:`, users);
       const currentUserId = getUserId();
-      // Filter out current user
       const filteredUsers = users.filter(u => {
-        const userId = u.id || u._id;
-        return userId !== currentUserId;
+        const uid = u.id || u._id;
+        return uid !== currentUserId;
       });
-      console.log(`📡 Setting online players:`, filteredUsers);
+      console.log(`📡 Setting ${filteredUsers.length} online players (excluding self)`);
       setOnlinePlayers(filteredUsers);
     });
 
@@ -170,7 +177,7 @@ const OnlineGame = () => {
       setRematchRequest({
         fromUserId: data.fromUserId,
         fromName: data.fromName,
-        gameId: currentGameId
+        gameId: data.gameId || currentGameId
       });
       toast.info(`${data.fromName} wants to play again!`);
     });
@@ -215,10 +222,13 @@ const OnlineGame = () => {
     const unsubscribeConnect = socketService.on('connect', () => {
       console.log('🔄 Socket reconnected');
       setIsSocketReady(true);
-      // Re-emit user-online when socket reconnects
+      reconnectAttemptsRef.current = 0;
       setTimeout(() => {
         socketService.emit('user-online', getUserId());
       }, 500);
+      setTimeout(() => {
+        socketService.emit('user-online', getUserId());
+      }, 1500);
     });
 
     // Listen for socket disconnect
@@ -233,17 +243,16 @@ const OnlineGame = () => {
         console.log('📱 Page became visible, reconnecting...');
         const userId = getUserId();
         if (userId) {
-          // Reconnect and emit user-online multiple times to ensure it registers
           socketService.connect(userId);
           setTimeout(() => {
             socketService.emit('user-online', userId);
           }, 200);
           setTimeout(() => {
             socketService.emit('user-online', userId);
-          }, 800);
+          }, 1000);
           setTimeout(() => {
             socketService.emit('user-online', userId);
-          }, 1500);
+          }, 2500);
         }
       }
     };
@@ -262,16 +271,12 @@ const OnlineGame = () => {
 
     // ========== HEARTBEAT - Keep connection alive ==========
     heartbeatIntervalRef.current = setInterval(() => {
-      if (socketService.isSocketConnected()) {
-        const userId = getUserId();
-        if (userId) {
+      const userId = getUserId();
+      if (userId) {
+        if (socketService.isSocketConnected()) {
           socketService.emit('user-online', userId);
           console.log('💓 Heartbeat: user-online emitted');
-        }
-      } else {
-        // Try to reconnect
-        const userId = getUserId();
-        if (userId) {
+        } else {
           console.log('🔄 Heartbeat: Reconnecting...');
           socketService.connect(userId);
           setTimeout(() => {
@@ -279,7 +284,7 @@ const OnlineGame = () => {
           }, 500);
         }
       }
-    }, 15000); // Every 15 seconds
+    }, 10000); // Every 10 seconds
 
     // ========== CLEANUP ==========
     return () => {
@@ -537,7 +542,6 @@ const OnlineGame = () => {
             </div>
           )}
 
-          {/* GAME REQUEST POPUP */}
           {gameRequest && (
             <div className="game-request-popup fade-in">
               <div className="popup-content">
@@ -556,7 +560,6 @@ const OnlineGame = () => {
             </div>
           )}
 
-          {/* REMATCH REQUEST POPUP */}
           {rematchRequest && (
             <div className="game-request-popup fade-in">
               <div className="popup-content">

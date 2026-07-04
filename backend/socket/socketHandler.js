@@ -9,7 +9,7 @@ module.exports = (io) => {
 
     socket.on('user-online', async (userId) => {
       try {
-        console.log(`👤 User ${userId} is now online`);
+        console.log(`👤 User ${userId} is now online on socket ${socket.id}`);
         
         // Update user status in database
         await User.findByIdAndUpdate(userId, {
@@ -36,14 +36,8 @@ module.exports = (io) => {
 
         console.log(`📡 Broadcasting ${formattedUsers.length} online users to ALL clients`);
         
-        // Broadcast to ALL connected clients (including the sender)
+        // IMPORTANT: Broadcast to ALL connected clients (including the sender)
         io.emit('online-users', formattedUsers);
-        
-        // Also send a confirmation to the sender
-        socket.emit('online-status-confirmed', { 
-          message: 'You are now online',
-          userId: userId 
-        });
         
       } catch (error) {
         console.error('Error updating user status:', error);
@@ -75,7 +69,6 @@ module.exports = (io) => {
           if (toSocketId) {
             console.log(`📤 Sending game request to ${toUser.name}`);
             
-            // Send request to the target user
             io.to(toSocketId).emit('game-request', {
               from: {
                 id: fromUserId,
@@ -84,7 +77,6 @@ module.exports = (io) => {
               message: `${fromUser.name} wants to play with you!`
             });
             
-            // Send confirmation back to the sender
             socket.emit('game-request-sent', {
               to: toUser.name,
               message: `Game request sent to ${toUser.name}`
@@ -367,13 +359,22 @@ module.exports = (io) => {
       console.log('❌ Client disconnected:', socket.id);
       
       try {
-        const user = await User.findOne({ socketId: socket.id });
-        if (user) {
-          await User.findByIdAndUpdate(user._id, {
+        // Find user by socket ID
+        let disconnectedUserId = null;
+        for (const [userId, socketId] of onlineUsers.entries()) {
+          if (socketId === socket.id) {
+            disconnectedUserId = userId;
+            break;
+          }
+        }
+        
+        if (disconnectedUserId) {
+          await User.findByIdAndUpdate(disconnectedUserId, {
             isOnline: false,
             socketId: null
           });
-          onlineUsers.delete(user._id.toString());
+          onlineUsers.delete(disconnectedUserId);
+          console.log(`👤 User ${disconnectedUserId} marked offline`);
 
           const users = await User.find({ isOnline: true }).select('name email isOnline');
           const formattedUsers = users.map(u => ({
