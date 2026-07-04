@@ -1,0 +1,140 @@
+.google-auth-container {
+  width: 100%;
+  margin: 10px 0;
+}
+
+.google-auth-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.google-auth-wrapper .g_id_signin {
+  width: 100% !important;
+}
+
+.google-auth-wrapper .g_id_signin > div {
+  width: 100% !important;
+}
+
+.google-auth-wrapper .g_id_signin > div > div {
+  width: 100% !important;
+}
+
+.google-auth-wrapper iframe {
+  width: 100% !important;
+  min-height: 50px !important;
+}
+
+.google-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  z-index: 10;
+}
+
+.loading-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.google-auth-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  padding: 0 10px;
+}
+
+.google-auth-divider::before,
+.google-auth-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.google-auth-divider span {
+  padding: 0 20px;
+  color: #999;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.google-auth-info {
+  text-align: center;
+  margin-top: 15px;
+}
+
+.google-info-text {
+  color: #666;
+  font-size: 0.95rem;
+  margin: 0 0 10px 0;
+}
+
+.google-privacy-notice {
+  color: #999;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.google-privacy-notice a {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.google-privacy-notice a:hover {
+  text-decoration: underline;
+  color: #764ba2;
+}
+
+/* Custom styles for Google button */
+.google-auth-wrapper .g_id_signin .g-btn {
+  border-radius: 12px !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.3s ease !important;
+}
+
+.google-auth-wrapper .g_id_signin .g-btn:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+  transform: translateY(-2px);
+}
+
+.google-auth-wrapper .g_id_signin .g-btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 480px) {
+  .google-auth-wrapper iframe {
+    min-height: 40px !important;
+  }
+  
+  .google-auth-divider {
+    margin: 15px 0;
+  }
+  
+  .google-auth-divider span {
+    padding: 0 15px;
+    font-size: 0.8rem;
+  }
+  
+  .google-privacy-notice {
+    font-size: 0.7rem;
+  }
+}

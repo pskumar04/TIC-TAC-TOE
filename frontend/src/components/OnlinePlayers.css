@@ -1,0 +1,295 @@
+.online-players-container {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 25px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+.players-header {
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.players-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #333;
+  margin: 0 0 15px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.player-count {
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
+  padding: 2px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  margin-left: auto;
+}
+
+.players-search {
+  width: 100%;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  outline: none;
+  background: white;
+}
+
+.search-input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+}
+
+.search-input::placeholder {
+  color: #999;
+}
+
+.players-list {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 -5px;
+  padding: 0 5px;
+  max-height: 320px;
+}
+
+.players-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.players-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.players-list::-webkit-scrollbar-thumb {
+  background: #667eea;
+  border-radius: 10px;
+}
+
+.players-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #999;
+  gap: 15px;
+}
+
+.no-players {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+}
+
+.no-players-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.no-players p {
+  font-size: 1.1rem;
+  margin: 0 0 5px 0;
+}
+
+.no-players-sub {
+  font-size: 0.9rem;
+  color: #bbb;
+}
+
+.player-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 14px 16px;
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 14px;
+  margin-bottom: 10px;
+  transition: all 0.3s ease;
+  animation: slide-in 0.3s ease-out;
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.player-item:hover {
+  background: rgba(102, 126, 234, 0.1);
+  transform: translateX(5px);
+}
+
+.player-item.selected {
+  background: rgba(102, 126, 234, 0.15);
+  border: 2px solid #667eea;
+}
+
+.player-avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.avatar-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 45px;
+  height: 45px;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 1.2rem;
+  text-transform: uppercase;
+}
+
+.online-status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  background: #4CAF50;
+  border: 3px solid white;
+  border-radius: 50%;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+}
+
+.player-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-name {
+  display: block;
+  font-weight: 700;
+  color: #333;
+  font-size: 1.05rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-status {
+  display: block;
+  font-size: 0.8rem;
+  color: #4CAF50;
+  font-weight: 500;
+}
+
+.invite-btn {
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  min-width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.invite-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.invite-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.players-footer {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 2px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.footer-info {
+  text-align: center;
+  color: #999;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .online-players-container {
+    padding: 15px;
+    max-height: 400px;
+  }
+
+  .players-title {
+    font-size: 1.2rem;
+  }
+
+  .player-item {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .avatar-initial {
+    width: 35px;
+    height: 35px;
+    font-size: 1rem;
+  }
+
+  .player-name {
+    font-size: 0.95rem;
+  }
+
+  .invite-btn {
+    padding: 8px 14px;
+    font-size: 0.8rem;
+    min-width: 80px;
+  }
+
+  .online-status-dot {
+    width: 10px;
+    height: 10px;
+  }
+
+  .search-input {
+    padding: 10px 14px;
+    font-size: 0.9rem;
+  }
+
+  .players-list {
+    max-height: 250px;
+  }
+}
