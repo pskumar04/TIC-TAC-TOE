@@ -31,7 +31,7 @@ const OnlineGame = () => {
   const [requestStatus, setRequestStatus] = useState(null);
   const [isSocketReady, setIsSocketReady] = useState(false);
   const timerRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
+  const heartbeatIntervalRef = useRef(null);
 
   // Get user ID safely
   const getUserId = () => {
@@ -46,7 +46,7 @@ const OnlineGame = () => {
     }
   }, [user, authLoading, navigate]);
 
-  // ========== SOCKET CONNECTION WITH RECONNECT LOGIC ==========
+  // ========== MAIN SOCKET CONNECTION ==========
   useEffect(() => {
     if (!user) return;
 
@@ -71,18 +71,21 @@ const OnlineGame = () => {
     emitUserOnline();
 
     // Re-emit after a short delay to ensure connection is established
-    setTimeout(emitUserOnline, 1000);
+    setTimeout(emitUserOnline, 500);
+    setTimeout(emitUserOnline, 1500);
 
     // ========== SOCKET EVENT LISTENERS ==========
     
-    // Listen for online users
+    // Listen for online users - THIS IS THE KEY FIX
     const unsubscribeOnline = socketService.on('online-users', (users) => {
       console.log(`📡 Received online users:`, users);
       const currentUserId = getUserId();
+      // Filter out current user
       const filteredUsers = users.filter(u => {
         const userId = u.id || u._id;
         return userId !== currentUserId;
       });
+      console.log(`📡 Setting online players:`, filteredUsers);
       setOnlinePlayers(filteredUsers);
     });
 
@@ -230,11 +233,17 @@ const OnlineGame = () => {
         console.log('📱 Page became visible, reconnecting...');
         const userId = getUserId();
         if (userId) {
-          // Reconnect and emit user-online
+          // Reconnect and emit user-online multiple times to ensure it registers
           socketService.connect(userId);
           setTimeout(() => {
             socketService.emit('user-online', userId);
-          }, 500);
+          }, 200);
+          setTimeout(() => {
+            socketService.emit('user-online', userId);
+          }, 800);
+          setTimeout(() => {
+            socketService.emit('user-online', userId);
+          }, 1500);
         }
       }
     };
@@ -251,16 +260,26 @@ const OnlineGame = () => {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // ========== PERIODIC HEARTBEAT TO KEEP CONNECTION ALIVE ==========
-    const heartbeatInterval = setInterval(() => {
+    // ========== HEARTBEAT - Keep connection alive ==========
+    heartbeatIntervalRef.current = setInterval(() => {
       if (socketService.isSocketConnected()) {
         const userId = getUserId();
         if (userId) {
           socketService.emit('user-online', userId);
           console.log('💓 Heartbeat: user-online emitted');
         }
+      } else {
+        // Try to reconnect
+        const userId = getUserId();
+        if (userId) {
+          console.log('🔄 Heartbeat: Reconnecting...');
+          socketService.connect(userId);
+          setTimeout(() => {
+            socketService.emit('user-online', userId);
+          }, 500);
+        }
       }
-    }, 30000); // Every 30 seconds
+    }, 15000); // Every 15 seconds
 
     // ========== CLEANUP ==========
     return () => {
@@ -282,10 +301,9 @@ const OnlineGame = () => {
       
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      clearInterval(heartbeatInterval);
       
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
       }
       
       if (timerRef.current) {
@@ -618,7 +636,6 @@ const OnlineGame = () => {
                     const userId = getUserId();
                     socketService.requestRematch(currentGameId, userId);
                     toast.info('Rematch request sent to opponent');
-                    // Disable button after clicking
                     const btn = document.querySelector('.game-btn.primary');
                     if (btn) {
                       btn.disabled = true;

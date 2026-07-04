@@ -470,6 +470,51 @@ module.exports = (io) => {
         }
     });
 
+
+    // In the user-online event, add better handling
+    socket.on('user-online', async (userId) => {
+    try {
+        console.log(`👤 User ${userId} is now online`);
+        
+        // Clear any existing socket for this user
+        if (onlineUsers.has(userId)) {
+        const oldSocketId = onlineUsers.get(userId);
+        if (oldSocketId !== socket.id) {
+            console.log(`🔄 User ${userId} reconnected with new socket ${socket.id}`);
+        }
+        }
+        
+        // Update user status
+        await User.findByIdAndUpdate(userId, {
+        isOnline: true,
+        socketId: socket.id
+        });
+
+        onlineUsers.set(userId, socket.id);
+        
+        // Get all online users EXCEPT the current user
+        const users = await User.find({ 
+        isOnline: true,
+        _id: { $ne: userId }
+        }).select('name email isOnline');
+
+        const formattedUsers = users.map(user => ({
+        id: user._id.toString(),
+        _id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        isOnline: user.isOnline
+        }));
+
+        console.log(`📡 Broadcasting ${formattedUsers.length} online users`);
+        
+        // Broadcast to ALL connected clients
+        io.emit('online-users', formattedUsers);
+    } catch (error) {
+        console.error('Error updating user status:', error);
+    }
+    });
+
     function checkWinner(board) {
       const winPatterns = [
         [0, 1, 2], [3, 4, 5], [6, 7, 8],
