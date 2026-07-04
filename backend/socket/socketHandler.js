@@ -8,42 +8,49 @@ module.exports = (io) => {
     console.log('✅ New client connected:', socket.id);
 
     socket.on('user-online', async (userId) => {
-        try {
-            console.log(`👤 User ${userId} is now online`);
-            
-            // Update user status
-            await User.findByIdAndUpdate(userId, {
-                isOnline: true,
-                socketId: socket.id
-            });
+      try {
+        console.log(`👤 User ${userId} is now online`);
+        
+        // Update user status in database
+        await User.findByIdAndUpdate(userId, {
+          isOnline: true,
+          socketId: socket.id
+        });
 
-            onlineUsers.set(userId, socket.id);
-            
-            // Get all online users EXCEPT the current user
-            const users = await User.find({ 
-                isOnline: true,
-                _id: { $ne: userId }
-            }).select('name email isOnline');
+        // Store in memory
+        onlineUsers.set(userId, socket.id);
+        
+        // Get ALL online users (including current)
+        const allUsers = await User.find({ 
+          isOnline: true
+        }).select('name email isOnline');
 
-            // Format the users to include both id and _id for compatibility
-            const formattedUsers = users.map(user => ({
-                id: user._id.toString(),
-                _id: user._id.toString(),
-                name: user.name,
-                email: user.email,
-                isOnline: user.isOnline
-            }));
+        // Format users
+        const formattedUsers = allUsers.map(user => ({
+          id: user._id.toString(),
+          _id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          isOnline: user.isOnline
+        }));
 
-            console.log(`📡 Broadcasting ${formattedUsers.length} online users `);
-            
-            // Broadcast online users to everyone
-            io.emit('online-users', formattedUsers);
-        } catch (error) {
-            console.error('Error updating user status:', error);
-        }
+        console.log(`📡 Broadcasting ${formattedUsers.length} online users to ALL clients`);
+        
+        // Broadcast to ALL connected clients (including the sender)
+        io.emit('online-users', formattedUsers);
+        
+        // Also send a confirmation to the sender
+        socket.emit('online-status-confirmed', { 
+          message: 'You are now online',
+          userId: userId 
+        });
+        
+      } catch (error) {
+        console.error('Error updating user status:', error);
+      }
     });
 
-    // SEND GAME REQUEST - FIXED
+    // Send game request
     socket.on('send-game-request', async ({ fromUserId, toUserId }) => {
       try {
         console.log(`📤 Game request from ${fromUserId} to ${toUserId}`);
@@ -62,12 +69,11 @@ module.exports = (io) => {
         }
 
         console.log(`📤 From: ${fromUser.name}, To: ${toUser.name}`);
-        console.log(`📤 To User Online: ${toUser.isOnline}`);
 
         if (toUser && toUser.isOnline) {
           const toSocketId = onlineUsers.get(toUserId);
           if (toSocketId) {
-            console.log(`📤 Sending game request to ${toUser.name} (${toSocketId})`);
+            console.log(`📤 Sending game request to ${toUser.name}`);
             
             // Send request to the target user
             io.to(toSocketId).emit('game-request', {
@@ -79,7 +85,7 @@ module.exports = (io) => {
             });
             
             // Send confirmation back to the sender
-            io.to(socket.id).emit('game-request-sent', {
+            socket.emit('game-request-sent', {
               to: toUser.name,
               message: `Game request sent to ${toUser.name}`
             });
@@ -87,13 +93,13 @@ module.exports = (io) => {
             console.log(`✅ Game request sent successfully`);
           } else {
             console.error('❌ Target user socket not found');
-            io.to(socket.id).emit('game-request-failed', {
+            socket.emit('game-request-failed', {
               message: `${toUser.name} is not connected`
             });
           }
         } else {
           console.error('❌ Target user is not online');
-          io.to(socket.id).emit('game-request-failed', {
+          socket.emit('game-request-failed', {
             message: `${toUser.name} is not online`
           });
         }
@@ -102,7 +108,7 @@ module.exports = (io) => {
       }
     });
 
-    // REJECT GAME REQUEST
+    // Reject game request
     socket.on('reject-game-request', async ({ fromUserId, toUserId }) => {
       try {
         console.log(`❌ Game request rejected from ${toUserId} to ${fromUserId}`);
@@ -121,14 +127,13 @@ module.exports = (io) => {
             by: toUser.name,
             message: `${toUser.name} is not able to play game with you.`
           });
-          console.log(`✅ Rejection sent to ${fromUser.name}`);
         }
       } catch (error) {
         console.error('Error rejecting game request:', error);
       }
     });
 
-    // ACCEPT GAME
+    // Accept game
     socket.on('accept-game', async ({ fromUserId, toUserId }) => {
       try {
         console.log(`✅ Game accepted from ${fromUserId} to ${toUserId}`);
@@ -136,7 +141,6 @@ module.exports = (io) => {
         const fromSocketId = onlineUsers.get(fromUserId);
         const toSocketId = onlineUsers.get(toUserId);
         
-        // Create game in database
         const fromUser = await User.findById(fromUserId);
         const toUser = await User.findById(toUserId);
         
@@ -165,7 +169,6 @@ module.exports = (io) => {
         await game.save();
         console.log(`🎮 Game created with ID: ${game._id}`);
 
-        // Send game data to both players
         if (fromSocketId) {
           io.to(fromSocketId).emit('game-start', {
             gameId: game._id,
@@ -174,7 +177,6 @@ module.exports = (io) => {
             board: game.board,
             currentTurn: game.currentTurn
           });
-          console.log(`📤 Game start sent to ${fromUser.name}`);
         }
 
         if (toSocketId) {
@@ -185,13 +187,13 @@ module.exports = (io) => {
             board: game.board,
             currentTurn: game.currentTurn
           });
-          console.log(`📤 Game start sent to ${toUser.name}`);
         }
       } catch (error) {
         console.error('❌ Error accepting game:', error);
       }
     });
 
+    // Make move
     socket.on('make-move', async ({ gameId, userId, position }) => {
       try {
         const game = await Game.findById(gameId);
@@ -250,7 +252,8 @@ module.exports = (io) => {
       }
     });
 
-    socket.on('rematch-request', async ({ gameId, fromUserId }) => {
+    // Rematch request
+    socket.on('request-rematch', async ({ gameId, fromUserId }) => {
       try {
         const game = await Game.findById(gameId);
         if (!game) return;
@@ -262,16 +265,18 @@ module.exports = (io) => {
             const fromUser = await User.findById(fromUserId);
             io.to(otherSocketId).emit('rematch-request', {
               fromUserId,
-              fromName: fromUser ? fromUser.name : 'Player'
+              fromName: fromUser ? fromUser.name : 'Player',
+              gameId: gameId
             });
           }
         }
       } catch (error) {
-        console.error('Error sending rematch request:', error);
+        console.error('Error requesting rematch:', error);
       }
     });
 
-    socket.on('rematch-accept', async ({ gameId, userId }) => {
+    // Accept rematch
+    socket.on('accept-rematch', async ({ gameId, userId }) => {
       try {
         const oldGame = await Game.findById(gameId);
         if (!oldGame) return;
@@ -293,121 +298,27 @@ module.exports = (io) => {
           }
         }
       } catch (error) {
-        console.error('Error starting rematch:', error);
+        console.error('Error accepting rematch:', error);
       }
     });
 
-
-    // REQUEST REMATCH
-    socket.on('request-rematch', async ({ gameId, fromUserId }) => {
-    try {
-        console.log(`🔄 Rematch requested by ${fromUserId} for game ${gameId}`);
-        
-        const game = await Game.findById(gameId);
-        if (!game) {
-        console.error('❌ Game not found');
-        return;
-        }
-
-        // Find the other player
-        const otherPlayer = game.players.find(p => p.userId.toString() !== fromUserId);
-        if (!otherPlayer) {
-        console.error('❌ Other player not found');
-        return;
-        }
-
-        const fromUser = await User.findById(fromUserId);
-        const otherSocketId = onlineUsers.get(otherPlayer.userId.toString());
-        
-        if (otherSocketId) {
-        io.to(otherSocketId).emit('rematch-request', {
-            fromUserId: fromUserId,
-            fromName: fromUser ? fromUser.name : 'Player',
-            gameId: gameId
-        });
-        console.log(`✅ Rematch request sent to ${otherPlayer.name}`);
-        } else {
-        console.error('❌ Other player socket not found');
-        }
-    } catch (error) {
-        console.error('Error requesting rematch:', error);
-    }
-    });
-
-    // ACCEPT REMATCH
-    socket.on('accept-rematch', async ({ gameId, userId }) => {
-    try {
-        console.log(`✅ Rematch accepted by ${userId} for game ${gameId}`);
-        
-        const game = await Game.findById(gameId);
-        if (!game) {
-        console.error('❌ Game not found');
-        return;
-        }
-
-        // Find the other player
-        const otherPlayer = game.players.find(p => p.userId.toString() !== userId);
-        if (!otherPlayer) {
-        console.error('❌ Other player not found');
-        return;
-        }
-
-        const user = await User.findById(userId);
-        const otherSocketId = onlineUsers.get(otherPlayer.userId.toString());
-        
-        if (otherSocketId) {
-        io.to(otherSocketId).emit('rematch-accepted', {
-            by: user ? user.name : 'Player',
-            gameId: gameId
-        });
-        console.log(`✅ Rematch accepted notification sent to ${otherPlayer.name}`);
-        }
-
-        // Create new game with same players
-        const newGame = new Game({
-        players: game.players,
-        currentTurn: 'X',
-        status: 'playing'
-        });
-
-        await newGame.save();
-        console.log(`🎮 New game created with ID: ${newGame._id}`);
-
-        // Send new game to both players
-        const gameData = newGame.toObject();
-        const playerIds = newGame.players.map(p => p.userId.toString());
-        for (const playerId of playerIds) {
-        const socketId = onlineUsers.get(playerId);
-        if (socketId) {
-            io.to(socketId).emit('rematch-started', gameData);
-        }
-        }
-    } catch (error) {
-        console.error('Error accepting rematch:', error);
-    }
-    });
-
-    // DECLINE REMATCH
+    // Decline rematch
     socket.on('decline-rematch', async ({ fromUserId, toUserId, gameId }) => {
-    try {
-        console.log(`❌ Rematch declined by ${toUserId} for ${fromUserId}`);
-        
+      try {
         const fromUser = await User.findById(fromUserId);
-        const toUser = await User.findById(toUserId);
-        
         const fromSocketId = onlineUsers.get(fromUserId);
         if (fromSocketId) {
-        io.to(fromSocketId).emit('rematch-declined', {
-            by: toUser ? toUser.name : 'Player',
+          io.to(fromSocketId).emit('rematch-declined', {
+            by: fromUser ? fromUser.name : 'Player',
             gameId: gameId
-        });
-        console.log(`✅ Rematch declined notification sent to ${fromUser ? fromUser.name : 'Player'}`);
+          });
         }
-    } catch (error) {
+      } catch (error) {
         console.error('Error declining rematch:', error);
-    }
+      }
     });
 
+    // Leave game
     socket.on('leave-game', async ({ gameId }) => {
       try {
         const game = await Game.findById(gameId);
@@ -427,6 +338,31 @@ module.exports = (io) => {
       }
     });
 
+    // User offline
+    socket.on('user-offline', async (userId) => {
+      try {
+        console.log(`👤 User ${userId} is going offline`);
+        await User.findByIdAndUpdate(userId, {
+          isOnline: false,
+          socketId: null
+        });
+        onlineUsers.delete(userId);
+        
+        const users = await User.find({ isOnline: true }).select('name email isOnline');
+        const formattedUsers = users.map(user => ({
+          id: user._id.toString(),
+          _id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          isOnline: user.isOnline
+        }));
+        io.emit('online-users', formattedUsers);
+      } catch (error) {
+        console.error('Error handling user offline:', error);
+      }
+    });
+
+    // Disconnect
     socket.on('disconnect', async () => {
       console.log('❌ Client disconnected:', socket.id);
       
@@ -439,80 +375,19 @@ module.exports = (io) => {
           });
           onlineUsers.delete(user._id.toString());
 
-          const users = await User.find({ 
-            isOnline: true,
-            _id: { $ne: user._id }
-          }).select('name email isOnline');
-          io.emit('online-users', users);
+          const users = await User.find({ isOnline: true }).select('name email isOnline');
+          const formattedUsers = users.map(u => ({
+            id: u._id.toString(),
+            _id: u._id.toString(),
+            name: u.name,
+            email: u.email,
+            isOnline: u.isOnline
+          }));
+          io.emit('online-users', formattedUsers);
         }
       } catch (error) {
         console.error('Error handling disconnect:', error);
       }
-    });
-
-
-    socket.on('user-offline', async (userId) => {
-        try {
-            console.log(`👤 User ${userId} is going offline`);
-            await User.findByIdAndUpdate(userId, {
-            isOnline: false,
-            socketId: null
-            });
-            onlineUsers.delete(userId);
-            
-            const users = await User.find({ 
-            isOnline: true,
-            _id: { $ne: userId }
-            }).select('name email isOnline');
-            io.emit('online-users', users);
-        } catch (error) {
-            console.error('Error handling user offline:', error);
-        }
-    });
-
-
-    // In the user-online event, add better handling
-    socket.on('user-online', async (userId) => {
-    try {
-        console.log(`👤 User ${userId} is now online`);
-        
-        // Clear any existing socket for this user
-        if (onlineUsers.has(userId)) {
-        const oldSocketId = onlineUsers.get(userId);
-        if (oldSocketId !== socket.id) {
-            console.log(`🔄 User ${userId} reconnected with new socket ${socket.id}`);
-        }
-        }
-        
-        // Update user status
-        await User.findByIdAndUpdate(userId, {
-        isOnline: true,
-        socketId: socket.id
-        });
-
-        onlineUsers.set(userId, socket.id);
-        
-        // Get all online users EXCEPT the current user
-        const users = await User.find({ 
-        isOnline: true,
-        _id: { $ne: userId }
-        }).select('name email isOnline');
-
-        const formattedUsers = users.map(user => ({
-        id: user._id.toString(),
-        _id: user._id.toString(),
-        name: user.name,
-        email: user.email,
-        isOnline: user.isOnline
-        }));
-
-        console.log(`📡 Broadcasting ${formattedUsers.length} online users`);
-        
-        // Broadcast to ALL connected clients
-        io.emit('online-users', formattedUsers);
-    } catch (error) {
-        console.error('Error updating user status:', error);
-    }
     });
 
     function checkWinner(board) {
