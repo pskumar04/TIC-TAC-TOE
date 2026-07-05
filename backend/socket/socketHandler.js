@@ -7,9 +7,18 @@ module.exports = (io) => {
   io.on('connection', (socket) => {
     console.log('✅ New client connected:', socket.id);
 
+    // ========== USER ONLINE ==========
     socket.on('user-online', async (userId) => {
       try {
         console.log(`👤 User ${userId} is now online on socket ${socket.id}`);
+        
+        // Clear any existing socket for this user
+        if (onlineUsers.has(userId)) {
+          const oldSocketId = onlineUsers.get(userId);
+          if (oldSocketId !== socket.id) {
+            console.log(`🔄 User ${userId} reconnected with new socket ${socket.id}`);
+          }
+        }
         
         // Update user status in database
         await User.findByIdAndUpdate(userId, {
@@ -36,15 +45,21 @@ module.exports = (io) => {
 
         console.log(`📡 Broadcasting ${formattedUsers.length} online users to ALL clients`);
         
-        // IMPORTANT: Broadcast to ALL connected clients (including the sender)
+        // Broadcast to ALL connected clients (including the sender)
         io.emit('online-users', formattedUsers);
+        
+        // Send confirmation to sender
+        socket.emit('online-status-confirmed', { 
+          message: 'You are now online',
+          userId: userId 
+        });
         
       } catch (error) {
         console.error('Error updating user status:', error);
       }
     });
 
-    // Send game request
+    // ========== SEND GAME REQUEST ==========
     socket.on('send-game-request', async ({ fromUserId, toUserId }) => {
       try {
         console.log(`📤 Game request from ${fromUserId} to ${toUserId}`);
@@ -100,7 +115,7 @@ module.exports = (io) => {
       }
     });
 
-    // Reject game request
+    // ========== REJECT GAME REQUEST ==========
     socket.on('reject-game-request', async ({ fromUserId, toUserId }) => {
       try {
         console.log(`❌ Game request rejected from ${toUserId} to ${fromUserId}`);
@@ -125,7 +140,7 @@ module.exports = (io) => {
       }
     });
 
-    // Accept game
+    // ========== ACCEPT GAME ==========
     socket.on('accept-game', async ({ fromUserId, toUserId }) => {
       try {
         console.log(`✅ Game accepted from ${fromUserId} to ${toUserId}`);
@@ -185,7 +200,7 @@ module.exports = (io) => {
       }
     });
 
-    // Make move
+    // ========== MAKE MOVE ==========
     socket.on('make-move', async ({ gameId, userId, position }) => {
       try {
         const game = await Game.findById(gameId);
@@ -244,43 +259,83 @@ module.exports = (io) => {
       }
     });
 
-    // Rematch request
+    // ========== REQUEST REMATCH - THIS IS THE KEY FIX ==========
     socket.on('request-rematch', async ({ gameId, fromUserId }) => {
       try {
+        console.log(`🔄 Rematch requested by ${fromUserId} for game ${gameId}`);
+        
         const game = await Game.findById(gameId);
-        if (!game) return;
+        if (!game) {
+          console.error('❌ Game not found');
+          return;
+        }
 
+        // Find the other player
         const otherPlayer = game.players.find(p => p.userId.toString() !== fromUserId);
-        if (otherPlayer) {
-          const otherSocketId = onlineUsers.get(otherPlayer.userId.toString());
-          if (otherSocketId) {
-            const fromUser = await User.findById(fromUserId);
-            io.to(otherSocketId).emit('rematch-request', {
-              fromUserId,
-              fromName: fromUser ? fromUser.name : 'Player',
-              gameId: gameId
-            });
-          }
+        if (!otherPlayer) {
+          console.error('❌ Other player not found');
+          return;
+        }
+
+        const fromUser = await User.findById(fromUserId);
+        const otherSocketId = onlineUsers.get(otherPlayer.userId.toString());
+        
+        if (otherSocketId) {
+          console.log(`📤 Sending rematch request to ${otherPlayer.name}`);
+          io.to(otherSocketId).emit('rematch-request', {
+            fromUserId: fromUserId,
+            fromName: fromUser ? fromUser.name : 'Player',
+            gameId: gameId
+          });
+          console.log(`✅ Rematch request sent to ${otherPlayer.name}`);
+        } else {
+          console.error('❌ Other player socket not found for ${otherPlayer.name}');
         }
       } catch (error) {
         console.error('Error requesting rematch:', error);
       }
     });
 
-    // Accept rematch
+    // ========== ACCEPT REMATCH ==========
     socket.on('accept-rematch', async ({ gameId, userId }) => {
       try {
-        const oldGame = await Game.findById(gameId);
-        if (!oldGame) return;
+        console.log(`✅ Rematch accepted by ${userId} for game ${gameId}`);
+        
+        const game = await Game.findById(gameId);
+        if (!game) {
+          console.error('❌ Game not found');
+          return;
+        }
 
+        // Find the other player
+        const otherPlayer = game.players.find(p => p.userId.toString() !== userId);
+        if (!otherPlayer) {
+          console.error('❌ Other player not found');
+          return;
+        }
+
+        const user = await User.findById(userId);
+        const otherSocketId = onlineUsers.get(otherPlayer.userId.toString());
+        
+        if (otherSocketId) {
+          io.to(otherSocketId).emit('rematch-accepted', {
+            by: user ? user.name : 'Player',
+            gameId: gameId
+          });
+          console.log(`✅ Rematch accepted notification sent to ${otherPlayer.name}`);
+        }
+
+        // Create new game with same players
         const newGame = new Game({
-          players: oldGame.players,
+          players: game.players,
           currentTurn: 'X',
           status: 'playing'
         });
 
         await newGame.save();
+        console.log(`🎮 New game created with ID: ${newGame._id}`);
 
+        // Send new game to both players
         const gameData = newGame.toObject();
         const playerIds = newGame.players.map(p => p.userId.toString());
         for (const playerId of playerIds) {
@@ -294,23 +349,28 @@ module.exports = (io) => {
       }
     });
 
-    // Decline rematch
+    // ========== DECLINE REMATCH ==========
     socket.on('decline-rematch', async ({ fromUserId, toUserId, gameId }) => {
       try {
+        console.log(`❌ Rematch declined by ${toUserId} for ${fromUserId}`);
+        
         const fromUser = await User.findById(fromUserId);
+        const toUser = await User.findById(toUserId);
+        
         const fromSocketId = onlineUsers.get(fromUserId);
         if (fromSocketId) {
           io.to(fromSocketId).emit('rematch-declined', {
-            by: fromUser ? fromUser.name : 'Player',
+            by: toUser ? toUser.name : 'Player',
             gameId: gameId
           });
+          console.log(`✅ Rematch declined notification sent to ${fromUser ? fromUser.name : 'Player'}`);
         }
       } catch (error) {
         console.error('Error declining rematch:', error);
       }
     });
 
-    // Leave game
+    // ========== LEAVE GAME ==========
     socket.on('leave-game', async ({ gameId }) => {
       try {
         const game = await Game.findById(gameId);
@@ -330,7 +390,7 @@ module.exports = (io) => {
       }
     });
 
-    // User offline
+    // ========== USER OFFLINE ==========
     socket.on('user-offline', async (userId) => {
       try {
         console.log(`👤 User ${userId} is going offline`);
@@ -354,7 +414,7 @@ module.exports = (io) => {
       }
     });
 
-    // Disconnect
+    // ========== DISCONNECT ==========
     socket.on('disconnect', async () => {
       console.log('❌ Client disconnected:', socket.id);
       
@@ -391,6 +451,7 @@ module.exports = (io) => {
       }
     });
 
+    // ========== CHECK WINNER ==========
     function checkWinner(board) {
       const winPatterns = [
         [0, 1, 2], [3, 4, 5], [6, 7, 8],
