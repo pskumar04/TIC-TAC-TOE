@@ -899,39 +899,40 @@ module.exports = (io) => {
     console.log('✅ New client connected:', socket.id);
 
     socket.on('user-online', async (userId) => {
-        try {
-            console.log(`👤 User ${userId} is now online on socket ${socket.id}`);
-            
-            // Update user status
-            await User.findByIdAndUpdate(userId, {
-                isOnline: true,
-                socketId: socket.id
-            });
+      try {
+        console.log(`👤 User ${userId} is now online on socket ${socket.id}`);
+        
+        // Update user status in database
+        await User.findByIdAndUpdate(userId, {
+          isOnline: true,
+          socketId: socket.id
+        });
 
-	    // Store in memory
-            onlineUsers.set(userId, socket.id);
-            
-            // Get all online users EXCEPT the current user
-            const users = await User.find({ 
-                isOnline: true,
-            }).select('name email isOnline');
+        // Store in memory
+        onlineUsers.set(userId, socket.id);
+        
+        // Get ALL online users (including current)
+        const allUsers = await User.find({ 
+          isOnline: true
+        }).select('name email isOnline');
 
-            // Format the users to include both id and _id for compatibility
-            const formattedUsers = allUsers.map(user => ({
-                id: user._id.toString(),
-                _id: user._id.toString(),
-                name: user.name,
-                email: user.email,
-                isOnline: user.isOnline
-            }));
+        // Format users
+        const formattedUsers = allUsers.map(user => ({
+          id: user._id.toString(),
+          _id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          isOnline: user.isOnline
+        }));
 
-            console.log(`📡 Broadcasting ${formattedUsers.length} online users to ALL clients`);
-            
-            // Broadcast online users to everyone
-            io.emit('online-users', formattedUsers);
-        } catch (error) {
-            console.error('Error updating user status:', error);
-        }
+        console.log(`📡 Broadcasting ${formattedUsers.length} online users to ALL clients`);
+        
+        // IMPORTANT: Broadcast to ALL connected clients (including the sender)
+        io.emit('online-users', formattedUsers);
+        
+      } catch (error) {
+        console.error('Error updating user status:', error);
+      }
     });
 
     // SEND GAME REQUEST - FIXED
