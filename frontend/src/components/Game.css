@@ -561,3 +561,60 @@
     font-size: 1rem;
   }
 }
+
+
+/* ========== OFFLINE PLAYERS STYLES ========== */
+.offline-players {
+  margin-top: 20px;
+  border-top: 2px solid #e0e0e0;
+  padding-top: 20px;
+}
+
+.offline-players h3 {
+  color: #999;
+  font-size: 1rem;
+  margin-bottom: 12px;
+}
+
+.offline-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background: #999;
+  border-radius: 50%;
+  margin-left: 8px;
+}
+
+.player-item.offline {
+  opacity: 0.7;
+}
+
+.player-item.offline .player-name {
+  color: #666;
+}
+
+.invite-email-btn {
+  background: linear-gradient(45deg, #ff9800, #f57c00);
+  color: white;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.85rem;
+  min-width: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.invite-email-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4);
+}
+
+.invite-email-btn:active {
+  transform: scale(0.95);
+}

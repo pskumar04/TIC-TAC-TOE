@@ -30,6 +30,8 @@ const OnlineGame = () => {
   const [requestSent, setRequestSent] = useState(false);
   const [requestStatus, setRequestStatus] = useState(null);
   const [isSocketReady, setIsSocketReady] = useState(false);
+  const [offlinePlayers, setOfflinePlayers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const timerRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
@@ -45,6 +47,28 @@ const OnlineGame = () => {
       return;
     }
   }, [user, authLoading, navigate]);
+
+
+  // Fetch all users when component mounts
+  useEffect(() => {
+    if (user) {
+      socketService.emit('get-all-users', user.id);
+      
+      const unsubscribeAllUsers = socketService.on('all-users-list', (users) => {
+        const currentUserId = user.id || user._id;
+        // Separate online and offline users
+        const online = users.filter(u => u.isOnline && u.id !== currentUserId);
+        const offline = users.filter(u => !u.isOnline && u.id !== currentUserId);
+        setOnlinePlayers(online);
+        setOfflinePlayers(offline);
+        setAllUsers(users);
+      });
+      
+      return () => {
+        unsubscribeAllUsers();
+      };
+    }
+  }, [user]);
 
   // ========== MAIN SOCKET CONNECTION ==========
   useEffect(() => {
@@ -237,6 +261,20 @@ const OnlineGame = () => {
       setIsSocketReady(false);
     });
 
+
+    // Add these inside the socket event listeners section
+    // Listen for email invitation sent
+    const unsubscribeEmailSent = socketService.on('email-invitation-sent', (data) => {
+      console.log('✅ Email invitation sent:', data);
+      toast.success(data.message);
+    });
+
+    // Listen for email invitation failed
+    const unsubscribeEmailFailed = socketService.on('email-invitation-failed', (data) => {
+      console.log('❌ Email invitation failed:', data);
+      toast.error(data.message);
+    });
+
     // ========== HANDLE PAGE VISIBILITY CHANGE ==========
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -303,6 +341,8 @@ const OnlineGame = () => {
       unsubscribePlayerLeft();
       unsubscribeConnect();
       unsubscribeDisconnect();
+      unsubscribeEmailSent();
+      unsubscribeEmailFailed();
       
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -443,6 +483,25 @@ const OnlineGame = () => {
     navigate('/modes');
   };
 
+
+  // Send email invitation
+  const handleEmailInvite = (player) => {
+    const gameLink = 'https://tic-tac-toe-sooty-nu.vercel.app/';
+    socketService.emit('send-email-invitation', {
+      fromUserId: user.id || user._id,
+      toUserId: player.id,
+      gameLink: gameLink
+    });
+    
+    socketService.on('email-invitation-sent', (data) => {
+      toast.success(data.message);
+    });
+    
+    socketService.on('email-invitation-failed', (data) => {
+      toast.error(data.message);
+    });
+  };
+
   const renderCell = (index) => {
     const value = board[index];
     return (
@@ -501,7 +560,7 @@ const OnlineGame = () => {
 
           {showPlayers && (
             <div className="online-players">
-              <h3>Online Players</h3>
+              <h3>🟢 Online Players</h3>
               <div className="players-list">
                 {onlinePlayers.length === 0 ? (
                   <p className="no-players">No other players online</p>
@@ -536,6 +595,36 @@ const OnlineGame = () => {
                   })
                 )}
               </div>
+
+              {/* ========== OFFLINE PLAYERS SECTION - PASTE THIS HERE ========== */}
+              {offlinePlayers.length > 0 && (
+                <div className="offline-players">
+                  <h3>📧 Offline Players</h3>
+                  <div className="players-list">
+                    {offlinePlayers.map((player, index) => {
+                      const playerId = player.id || player._id;
+                      return (
+                        <div key={playerId || index} className="player-item offline">
+                          <div className="player-details">
+                            <span className="player-name">
+                              {player.name}
+                              <span className="offline-dot"></span>
+                            </span>
+                          </div>
+                          <button 
+                            className="invite-email-btn"
+                            onClick={() => handleEmailInvite(player)}
+                          >
+                            ✉️ Invite
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* ========== END OFFLINE PLAYERS SECTION ========== */}
+
               <button className="game-btn danger" onClick={() => navigate('/modes')}>
                 Back to Modes
               </button>
