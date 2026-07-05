@@ -14,6 +14,27 @@ const transporter = nodemailer.createTransport({
 module.exports = (io) => {
   const onlineUsers = new Map();
 
+  // Helper function to broadcast all users to everyone
+  const broadcastAllUsers = async () => {
+    try {
+      const allUsers = await User.find({})
+        .select('name email isOnline _id');
+      
+      const formattedUsers = allUsers.map(user => ({
+        id: user._id.toString(),
+        _id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        isOnline: user.isOnline || false
+      }));
+
+      console.log(`📡 Broadcasting ${formattedUsers.length} total users to ALL clients`);
+      io.emit('all-users-list', formattedUsers);
+    } catch (error) {
+      console.error('Error broadcasting all users:', error);
+    }
+  };
+
   io.on('connection', (socket) => {
     console.log('✅ New client connected:', socket.id);
 
@@ -48,6 +69,9 @@ module.exports = (io) => {
         
         // IMPORTANT: Broadcast to ALL connected clients (including the sender)
         io.emit('online-users', formattedUsers);
+        
+        // Also broadcast ALL users (online + offline) to everyone
+        await broadcastAllUsers();
         
       } catch (error) {
         console.error('Error updating user status:', error);
@@ -417,7 +441,7 @@ module.exports = (io) => {
         }
     } catch (error) {
         console.error('Error declining rematch:', error);
-    }
+      }
     });
 
     socket.on('leave-game', async ({ gameId }) => {
@@ -456,6 +480,9 @@ module.exports = (io) => {
             _id: { $ne: user._id }
           }).select('name email isOnline');
           io.emit('online-users', users);
+          
+          // Also broadcast ALL users (online + offline) to everyone
+          await broadcastAllUsers();
         }
       } catch (error) {
         console.error('Error handling disconnect:', error);
@@ -477,6 +504,9 @@ module.exports = (io) => {
               _id: { $ne: userId }
             }).select('name email isOnline');
             io.emit('online-users', users);
+            
+            // Also broadcast ALL users (online + offline) to everyone
+            await broadcastAllUsers();
         } catch (error) {
             console.error('Error handling user offline:', error);
         }
@@ -522,12 +552,14 @@ module.exports = (io) => {
         
         // Broadcast to ALL connected clients
         io.emit('online-users', formattedUsers);
+        
+        // Also broadcast ALL users (online + offline) to everyone
+        await broadcastAllUsers();
     } catch (error) {
         console.error('Error updating user status:', error);
     }
     });
 
-    // ========== NEW: GET ALL USERS (ONLINE + OFFLINE) ==========
     // ========== GET ALL USERS (ONLINE + OFFLINE) ==========
     socket.on('get-all-users', async (userId) => {
       try {
@@ -555,7 +587,7 @@ module.exports = (io) => {
       }
     });
 
-    // ========== NEW: SEND EMAIL INVITATION TO OFFLINE USER ==========
+    // ========== SEND EMAIL INVITATION TO OFFLINE USER ==========
     socket.on('send-email-invitation', async ({ fromUserId, toUserId, gameLink }) => {
       try {
         console.log(`📧 Sending email invitation from ${fromUserId} to ${toUserId}`);
