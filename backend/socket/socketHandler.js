@@ -528,8 +528,12 @@ module.exports = (io) => {
     });
 
     // ========== NEW: GET ALL USERS (ONLINE + OFFLINE) ==========
+    // ========== GET ALL USERS (ONLINE + OFFLINE) ==========
     socket.on('get-all-users', async (userId) => {
       try {
+        console.log(`📋 Fetching all users for ${userId}`);
+        
+        // Get ALL users from database (both online and offline)
         const allUsers = await User.find({})
           .select('name email isOnline _id');
         
@@ -541,9 +545,13 @@ module.exports = (io) => {
           isOnline: user.isOnline || false
         }));
 
+        console.log(`📋 Found ${formattedUsers.length} total users`);
+        
+        // Send to the requesting client only
         socket.emit('all-users-list', formattedUsers);
       } catch (error) {
         console.error('Error getting all users:', error);
+        socket.emit('all-users-list', []);
       }
     });
 

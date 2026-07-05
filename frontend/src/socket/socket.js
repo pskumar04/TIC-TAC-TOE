@@ -136,6 +136,18 @@ class SocketService {
       this.emitEvent('game-request-failed', data);
     });
 
+    // Add this to setupDefaultListeners method
+    this.socket.on('all-users-list', (users) => {
+      this.emitEvent('all-users-list', users);
+    });
+
+    this.socket.on('email-invitation-sent', (data) => {
+      this.emitEvent('email-invitation-sent', data);
+    });
+
+    this.socket.on('email-invitation-failed', (data) => {
+      this.emitEvent('email-invitation-failed', data);
+    });
 
   }
 

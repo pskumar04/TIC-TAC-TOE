@@ -50,22 +50,31 @@ const OnlineGame = () => {
 
 
   // Fetch all users when component mounts
+  // Fetch all users when component mounts
   useEffect(() => {
     if (user) {
+      console.log('📋 Fetching all users...');
       socketService.emit('get-all-users', user.id);
       
       const unsubscribeAllUsers = socketService.on('all-users-list', (users) => {
+        console.log('📋 Received all users:', users);
         const currentUserId = user.id || user._id;
+        
         // Separate online and offline users
         const online = users.filter(u => u.isOnline && u.id !== currentUserId);
         const offline = users.filter(u => !u.isOnline && u.id !== currentUserId);
+        
+        console.log(`📋 Online: ${online.length}, Offline: ${offline.length}`);
+        
         setOnlinePlayers(online);
         setOfflinePlayers(offline);
         setAllUsers(users);
       });
       
       return () => {
-        unsubscribeAllUsers();
+        if (unsubscribeAllUsers) {
+          unsubscribeAllUsers();
+        }
       };
     }
   }, [user]);
