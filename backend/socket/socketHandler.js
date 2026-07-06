@@ -602,8 +602,7 @@ module.exports = (io) => {
       }
     });
 
-    // ========== SEND EMAIL INVITATION TO OFFLINE USER ==========
-    // ========== SEND EMAIL INVITATION - SENDGRID VERSION ==========
+    // ========== SEND EMAIL INVITATION - SENDGRID VERSION (FIXED) ==========
     socket.on('send-email-invitation', async ({ fromUserId, toUserId, gameLink }) => {
       try {
         console.log(`📧 SENDING EMAIL INVITATION from ${fromUserId} to ${toUserId}`);
@@ -638,9 +637,12 @@ module.exports = (io) => {
           return;
         }
 
+        // Use the verified email address
+        const fromEmail = process.env.EMAIL_FROM || 'satishpanduru9492@gmail.com';
+
         const msg = {
           to: toUser.email,
-          from: process.env.EMAIL_FROM || 'noreply@tictactoe.com',
+          from: fromEmail, // Must be a verified sender in SendGrid
           subject: `${fromUser.name} wants to play TIC-TAC-TOE with you! 🎮`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa; border-radius: 10px;">
@@ -689,10 +691,19 @@ module.exports = (io) => {
 
       } catch (error) {
         console.error('❌ Error sending email invitation:', error);
-        console.error('❌ Error details:', error.response?.body || error.message);
+        
+        // Better error handling
+        let errorMessage = 'Failed to send email invitation';
+        if (error.response?.body?.errors) {
+          const errors = error.response.body.errors;
+          errorMessage = errors.map(e => e.message).join(', ');
+          console.error('❌ SendGrid errors:', errors);
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
         
         socket.emit('email-invitation-failed', {
-          message: error.response?.body?.errors?.[0]?.message || error.message || 'Failed to send email invitation'
+          message: errorMessage
         });
       }
     });
