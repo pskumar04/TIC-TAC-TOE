@@ -3,26 +3,12 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const nodemailer = require('nodemailer');
-const crypto = require('crypto');
+const sgMail = require('@sendgrid/mail');
 
-// Email configuration for sending OTP
-let transporter = null;
-
-if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-  transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    },
-    tls: {
-      rejectUnauthorized: false
-    },
-    family: 4
-  });
+// ========== SENDGRID CONFIGURATION ==========
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  console.log('✅ SendGrid configured for auth routes');
 }
 
 // ========== FORGOT PASSWORD - SEND OTP ==========
@@ -30,8 +16,10 @@ router.post('/forgot-password', async (req, res) => {
   try {
     const { email, captcha, userCaptcha } = req.body;
 
+    console.log('📧 Forgot password request received:', { email, captcha, userCaptcha });
+
     // Validate captcha
-    if (captcha.toLowerCase() !== userCaptcha.toLowerCase()) {
+    if (!captcha || !userCaptcha || captcha.toLowerCase() !== userCaptcha.toLowerCase()) {
       return res.status(400).json({ error: 'Invalid captcha' });
     }
 
@@ -44,16 +32,20 @@ router.post('/forgot-password', async (req, res) => {
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     
+    console.log(`📧 Generated OTP for ${email}: ${otp}`);
+    
     // Save OTP to user with expiry (10 minutes)
     user.resetPasswordOTP = otp;
     user.resetPasswordOTPExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
     await user.save();
 
-    // Send OTP via email
-    if (transporter) {
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
+    // Send OTP via SendGrid
+    if (process.env.SENDGRID_API_KEY) {
+      const fromEmail = process.env.EMAIL_FROM || 'satishpanduru9492@gmail.com';
+      
+      const msg = {
         to: user.email,
+        from: fromEmail,
         subject: 'TIC-TAC-TOE - Password Reset OTP 🔐',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; background-color: #f8f9fa; border-radius: 10px;">
@@ -76,7 +68,10 @@ router.post('/forgot-password', async (req, res) => {
         `
       };
 
-      await transporter.sendMail(mailOptions);
+      await sgMail.send(msg);
+      console.log(`✅ OTP email sent to ${user.email} via SendGrid`);
+    } else {
+      console.log('⚠️ SendGrid not configured. OTP saved but email not sent.');
     }
 
     res.json({ 
@@ -95,6 +90,8 @@ router.post('/forgot-password', async (req, res) => {
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
+
+    console.log('🔐 Verify OTP request:', { email, otp });
 
     const user = await User.findOne({ email });
     if (!user) {
@@ -127,6 +124,8 @@ router.post('/reset-password', async (req, res) => {
   try {
     const { email, newPassword } = req.body;
 
+    console.log('🔑 Reset password request:', { email });
+
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -138,6 +137,8 @@ router.post('/reset-password', async (req, res) => {
     user.resetPasswordOTP = null;
     user.resetPasswordOTPExpiry = null;
     await user.save();
+
+    console.log('✅ Password reset successfully for:', email);
 
     res.json({ 
       success: true, 
@@ -160,6 +161,7 @@ router.get('/captcha', (req, res) => {
       captcha += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     
+    console.log('🔄 Captcha generated:', captcha);
     res.json({ captcha });
   } catch (error) {
     console.error('Captcha generation error:', error);
@@ -167,7 +169,7 @@ router.get('/captcha', (req, res) => {
   }
 });
 
-// Signup
+// ========== SIGNUP ==========
 router.post('/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -211,7 +213,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// Login
+// ========== LOGIN ==========
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -249,16 +251,14 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Google Auth - UPDATED with better error handling
+// ========== GOOGLE AUTH ==========
 router.post('/google', async (req, res) => {
   try {
     console.log('📥 Google auth request received');
     console.log('📦 Request body:', req.body);
     
-    // Extract data from request body
     const { googleId, email, name } = req.body;
 
-    // Validate required fields with detailed errors
     if (!googleId) {
       console.error('❌ Missing googleId');
       return res.status(400).json({ 
@@ -277,14 +277,12 @@ router.post('/google', async (req, res) => {
 
     console.log('✅ All fields present:', { googleId, email, name });
 
-    // Check if user exists with googleId or email
     let user = await User.findOne({ 
       $or: [{ googleId }, { email }] 
     });
 
     if (!user) {
       console.log('👤 Creating new user...');
-      // Create new user
       user = new User({
         googleId,
         email,
@@ -294,7 +292,6 @@ router.post('/google', async (req, res) => {
       console.log('✅ New user created:', user._id);
     } else {
       console.log('📝 Existing user found:', user._id);
-      // Update existing user's googleId if they signed up with email before
       if (!user.googleId) {
         user.googleId = googleId;
         await user.save();
@@ -302,7 +299,6 @@ router.post('/google', async (req, res) => {
       }
     }
 
-    // Generate token
     const token = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET,
