@@ -11,7 +11,7 @@ const ForgotPassword = () => {
   const [captcha, setCaptcha] = useState('');
   const [userCaptcha, setUserCaptcha] = useState('');
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1); // 1: Email+Captcha, 2: OTP Verification, 3: Reset Password
+  const [step, setStep] = useState(1);
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -19,7 +19,6 @@ const ForgotPassword = () => {
 
   const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-  // Generate captcha on mount
   useEffect(() => {
     generateCaptcha();
   }, []);
@@ -30,12 +29,30 @@ const ForgotPassword = () => {
       setCaptcha(response.data.captcha);
     } catch (error) {
       console.error('Error generating captcha:', error);
+      // Fallback captcha generation if API fails
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let fallbackCaptcha = '';
+      for (let i = 0; i < 8; i++) {
+        fallbackCaptcha += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      setCaptcha(fallbackCaptcha);
     }
   };
 
   // Step 1: Send OTP
   const handleSendOTP = async (e) => {
     e.preventDefault();
+    
+    if (!email) {
+      toast.error('Please enter your email');
+      return;
+    }
+
+    if (!userCaptcha) {
+      toast.error('Please enter the captcha');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -61,6 +78,12 @@ const ForgotPassword = () => {
   // Step 2: Verify OTP
   const handleVerifyOTP = async (e) => {
     e.preventDefault();
+
+    if (!otp || otp.length !== 6) {
+      toast.error('Please enter a valid 6-digit OTP');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -113,7 +136,6 @@ const ForgotPassword = () => {
     setLoading(false);
   };
 
-  // Render Step 1: Email + Captcha
   const renderEmailStep = () => (
     <form onSubmit={handleSendOTP} className="auth-form">
       <div className="form-group">
@@ -163,7 +185,6 @@ const ForgotPassword = () => {
     </form>
   );
 
-  // Render Step 2: OTP Verification
   const renderOTPStep = () => (
     <form onSubmit={handleVerifyOTP} className="auth-form">
       <div className="form-group">
@@ -185,7 +206,7 @@ const ForgotPassword = () => {
         {loading ? 'Verifying...' : 'Verify OTP'}
       </button>
 
-      <div className="auth-footer">
+      <div className="auth-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button 
           type="button" 
           className="resend-btn"
@@ -199,7 +220,6 @@ const ForgotPassword = () => {
     </form>
   );
 
-  // Render Step 3: Reset Password
   const renderPasswordStep = () => (
     <form onSubmit={handleResetPassword} className="auth-form">
       <div className="form-group">
