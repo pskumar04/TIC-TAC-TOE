@@ -8,13 +8,29 @@ let transporter = null;
 // Initialize transporter only if credentials exist
 if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
   transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // true for 465, false for other ports
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
+    },
+    tls: {
+      rejectUnauthorized: false
+    },
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000
+  });
+  
+  // Verify connection on startup
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error('❌ Email transporter verification failed:', error);
+    } else {
+      console.log('✅ Email transporter verified and ready!');
     }
   });
-  console.log('✅ Email transporter initialized');
 } else {
   console.log('⚠️ Email credentials not configured. Email features disabled.');
 }
@@ -640,9 +656,9 @@ module.exports = (io) => {
 
         // Check if transporter is configured
         if (!transporter) {
-          console.error('❌ Email transporter not configured. Check EMAIL_USER and EMAIL_PASS');
+          console.error('❌ Email transporter not configured.');
           socket.emit('email-invitation-failed', {
-            message: 'Email service not configured. Please contact support.'
+            message: 'Email service not configured.'
           });
           return;
         }
@@ -694,6 +710,7 @@ module.exports = (io) => {
         console.log(`📧 Sending email to ${toUser.email}...`);
         const info = await transporter.sendMail(mailOptions);
         console.log(`✅ Email sent successfully! Message ID: ${info.messageId}`);
+        console.log(`✅ Email sent to: ${info.accepted.join(', ')}`);
 
 
         socket.emit('email-invitation-sent', {
@@ -703,8 +720,17 @@ module.exports = (io) => {
 
       } catch (error) {
         console.error('❌ Error sending email invitation:', error);
+
+        let errorMessage = 'Failed to send email invitation';
+        if (error.code === 'EAUTH') {
+          errorMessage = 'Email authentication failed. Please check EMAIL_USER and EMAIL_PASS.';
+        } else if (error.code === 'ESOCKET' || error.code === 'ECONNECTION') {
+          errorMessage = 'Cannot connect to email server. Please check internet connection.';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
         socket.emit('email-invitation-failed', {
-          message: error.message || 'Failed to send email invitation'
+          message: error.message
         });
       }
     });
