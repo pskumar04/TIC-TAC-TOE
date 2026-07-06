@@ -11,7 +11,6 @@ import Signup from './components/Signup';
 import ForgotPassword from './components/ForgotPassword'; // ADD THIS
 import ComputerGame from './components/ComputerGame';
 import OnlineGame from './components/OnlineGame';
-import './App.css';
 
 function App() {
   return (
