@@ -2,14 +2,23 @@ const Game = require('../models/Game');
 const User = require('../models/User');
 const nodemailer = require('nodemailer');
 
-// Email configuration (add your email credentials in .env)
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
+// Email configuration
+let transporter = null;
+
+// Initialize transporter only if credentials exist
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+  console.log('✅ Email transporter initialized');
+} else {
+  console.log('⚠️ Email credentials not configured. Email features disabled.');
+}
+
 
 module.exports = (io) => {
   const onlineUsers = new Map();
@@ -96,13 +105,13 @@ module.exports = (io) => {
           return;
         }
 
-        console.log(`📤 From: ${fromUser.name}, To: ${toUser.name}`);
-        console.log(`📤 To User Online: ${toUser.isOnline}`);
+        // console.log(`📤 From: ${fromUser.name}, To: ${toUser.name}`);
+        // console.log(`📤 To User Online: ${toUser.isOnline}`);
 
         if (toUser && toUser.isOnline) {
           const toSocketId = onlineUsers.get(toUserId);
           if (toSocketId) {
-            console.log(`📤 Sending game request to ${toUser.name} (${toSocketId})`);
+            console.log(`📤 Sending game request to ${toUser.name}`);
             
             // Send request to the target user
             io.to(toSocketId).emit('game-request', {
@@ -156,7 +165,7 @@ module.exports = (io) => {
             by: toUser.name,
             message: `${toUser.name} is not able to play game with you.`
           });
-          console.log(`✅ Rejection sent to ${fromUser.name}`);
+          // console.log(`✅ Rejection sent to ${fromUser.name}`);
         }
       } catch (error) {
         console.error('Error rejecting game request:', error);
@@ -209,7 +218,7 @@ module.exports = (io) => {
             board: game.board,
             currentTurn: game.currentTurn
           });
-          console.log(`📤 Game start sent to ${fromUser.name}`);
+          // console.log(`📤 Game start sent to ${fromUser.name}`);
         }
 
         if (toSocketId) {
@@ -220,7 +229,7 @@ module.exports = (io) => {
             board: game.board,
             currentTurn: game.currentTurn
           });
-          console.log(`📤 Game start sent to ${toUser.name}`);
+          // console.log(`📤 Game start sent to ${toUser.name}`);
         }
       } catch (error) {
         console.error('❌ Error accepting game:', error);
@@ -437,7 +446,7 @@ module.exports = (io) => {
             by: toUser ? toUser.name : 'Player',
             gameId: gameId
         });
-        console.log(`✅ Rematch declined notification sent to ${fromUser ? fromUser.name : 'Player'}`);
+        console.log(`✅ Rematch declined notification sent`);
         }
     } catch (error) {
         console.error('Error declining rematch:', error);
@@ -467,17 +476,29 @@ module.exports = (io) => {
       console.log('❌ Client disconnected:', socket.id);
       
       try {
-        const user = await User.findOne({ socketId: socket.id });
-        if (user) {
-          await User.findByIdAndUpdate(user._id, {
+        let disconnectedUserId = null;
+        for (const [userId, socketId] of onlineUsers.entries()) {
+          if (socketId === socket.id) {
+            disconnectedUserId = userId;
+            break;
+          }
+        }
+        
+        if (disconnectedUserId) {
+          await User.findByIdAndUpdate(disconnectedUserId, {
             isOnline: false,
             socketId: null
           });
-          onlineUsers.delete(user._id.toString());
+          // onlineUsers.delete(user._id.toString());
+          onlineUsers.delete(disconnectedUserId);
+          console.log(`👤 User ${disconnectedUserId} marked offline`);
+
 
           const users = await User.find({ 
             isOnline: true,
-            _id: { $ne: user._id }
+            // _id: { $ne: user._id }
+            _id: { $ne: disconnectedUserId }
+
           }).select('name email isOnline');
           io.emit('online-users', users);
           
@@ -590,8 +611,19 @@ module.exports = (io) => {
     // ========== SEND EMAIL INVITATION TO OFFLINE USER ==========
     socket.on('send-email-invitation', async ({ fromUserId, toUserId, gameLink }) => {
       try {
-        console.log(`📧 Sending email invitation from ${fromUserId} to ${toUserId}`);
-        
+        // console.log(`📧 Sending email invitation from ${fromUserId} to ${toUserId}`);
+        console.log(`📧 SENDING EMAIL INVITATION from ${fromUserId} to ${toUserId}`);
+
+        // Validate inputs
+        if (!fromUserId || !toUserId) {
+          console.error('❌ Missing fromUserId or toUserId');
+          socket.emit('email-invitation-failed', {
+            message: 'Invalid user IDs'
+          });
+          return;
+        }
+
+        // Get users from database        
         const fromUser = await User.findById(fromUserId);
         const toUser = await User.findById(toUserId);
         
@@ -603,11 +635,14 @@ module.exports = (io) => {
           return;
         }
 
-        // Check if email is configured
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-          console.error('❌ Email not configured. Add EMAIL_USER and EMAIL_PASS in .env');
+        console.log(`📧 From: ${fromUser.name} (${fromUser.email})`);
+        console.log(`📧 To: ${toUser.name} (${toUser.email})`);
+
+        // Check if transporter is configured
+        if (!transporter) {
+          console.error('❌ Email transporter not configured. Check EMAIL_USER and EMAIL_PASS');
           socket.emit('email-invitation-failed', {
-            message: 'Email service not configured'
+            message: 'Email service not configured. Please contact support.'
           });
           return;
         }
@@ -616,7 +651,9 @@ module.exports = (io) => {
         const mailOptions = {
           from: process.env.EMAIL_USER,
           to: toUser.email,
-          subject: `${fromUser.name} wants to play TIC-TAC-TOE with you!`,
+          // subject: `${fromUser.name} wants to play TIC-TAC-TOE with you!`,
+          subject: `${fromUser.name} wants to play TIC-TAC-TOE with you! 🎮`,
+
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa; border-radius: 10px;">
               <h1 style="color: #667eea; text-align: center;">🎮 TIC-TAC-TOE</h1>
@@ -629,7 +666,8 @@ module.exports = (io) => {
                   Click the button below to join the game and challenge your friend!
                 </p>
                 <div style="text-align: center; margin: 30px 0;">
-                  <a href="${gameLink || 'https://tic-tac-toe-by-satish.vercel.app'}" 
+                  <a href="${gameLink || 'https://tic-tac-toe-sooty-nu.vercel.app'}" 
+
                      style="background: linear-gradient(45deg, #667eea, #764ba2); 
                             color: white; 
                             padding: 14px 40px; 
@@ -653,8 +691,10 @@ module.exports = (io) => {
           `
         };
 
-        await transporter.sendMail(mailOptions);
-        console.log(`✅ Email invitation sent to ${toUser.email}`);
+        console.log(`📧 Sending email to ${toUser.email}...`);
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ Email sent successfully! Message ID: ${info.messageId}`);
+
 
         socket.emit('email-invitation-sent', {
           to: toUser.name,
@@ -664,7 +704,7 @@ module.exports = (io) => {
       } catch (error) {
         console.error('❌ Error sending email invitation:', error);
         socket.emit('email-invitation-failed', {
-          message: 'Failed to send email invitation'
+          message: error.message || 'Failed to send email invitation'
         });
       }
     });

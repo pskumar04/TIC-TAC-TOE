@@ -494,21 +494,34 @@ const OnlineGame = () => {
 
 
   // Send email invitation
+  // Send email invitation - FIXED
   const handleEmailInvite = (player) => {
-    const gameLink = 'https://tic-tac-toe-sooty-nu.vercel.app/';
+    if (!user) {
+      toast.warning('Please login first');
+      return;
+    }
+
+    const fromUserId = user.id || user._id;
+    const toUserId = player.id || player._id;
+    const gameLink = 'https://tic-tac-toe-sooty-nu.vercel.app';
+
+    console.log('📧 Sending email invitation from:', fromUserId);
+    console.log('📧 To player:', player);
+    console.log('📧 To User ID:', toUserId);
+
+    if (!fromUserId || !toUserId) {
+      toast.error('Invalid user ID');
+      return;
+    }
+
+    // Emit the event to backend
     socketService.emit('send-email-invitation', {
-      fromUserId: user.id || user._id,
-      toUserId: player.id,
+      fromUserId: fromUserId,
+      toUserId: toUserId,
       gameLink: gameLink
     });
-    
-    socketService.on('email-invitation-sent', (data) => {
-      toast.success(data.message);
-    });
-    
-    socketService.on('email-invitation-failed', (data) => {
-      toast.error(data.message);
-    });
+
+    toast.info(`Sending invitation to ${player.name}...`);
   };
 
   const renderCell = (index) => {

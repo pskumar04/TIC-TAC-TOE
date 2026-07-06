@@ -142,10 +142,12 @@ class SocketService {
     });
 
     this.socket.on('email-invitation-sent', (data) => {
+      console.log('📧 Email invitation sent event received:', data);
       this.emitEvent('email-invitation-sent', data);
     });
 
     this.socket.on('email-invitation-failed', (data) => {
+      console.log('❌ Email invitation failed event received:', data);
       this.emitEvent('email-invitation-failed', data);
     });
 
