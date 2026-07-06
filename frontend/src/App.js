@@ -8,9 +8,10 @@ import Home from './components/Home';
 import Modes from './components/Modes';
 import Login from './components/Login';
 import Signup from './components/Signup';
-import ForgotPassword from './components/ForgotPassword'; // ADD THIS
+import ForgotPassword from './components/ForgotPassword';
 import ComputerGame from './components/ComputerGame';
 import OnlineGame from './components/OnlineGame';
+import './App.css';
 
 function App() {
   return (
@@ -37,9 +38,8 @@ function App() {
 }
 
 function AppContent() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-
+  const { user } = useAuth();
+  
   useEffect(() => {
     if (user) {
       socketService.connect(user.id);
@@ -48,18 +48,13 @@ function AppContent() {
     }
   }, [user]);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
-
   return (
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/modes" element={<Modes />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} /> {/* ADD THIS */}
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/computer-game" element={<ComputerGame />} />
       <Route path="/online-game/:gameId?" element={<OnlineGame />} />
       <Route path="*" element={<Navigate to="/" />} />
