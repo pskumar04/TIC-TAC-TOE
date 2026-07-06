@@ -656,7 +656,7 @@ module.exports = (io) => {
                   Click the button below to join the game and challenge your friend!
                 </p>
                 <div style="text-align: center; margin: 30px 0;">
-                  <a href="${gameLink || 'https://tic-tac-toe-sooty-nu.vercel.app'}" 
+                  <a href="${gameLink || 'https://tic-tac-toe-by-satish.vercel.app'}" 
                     style="background: linear-gradient(45deg, #667eea, #764ba2); 
                             color: white; 
                             padding: 14px 40px; 

@@ -503,7 +503,7 @@ const OnlineGame = () => {
 
     const fromUserId = user.id || user._id;
     const toUserId = player.id || player._id;
-    const gameLink = 'https://tic-tac-toe-sooty-nu.vercel.app';
+    const gameLink = 'https://tic-tac-toe-by-satish.vercel.app';
 
     console.log('📧 Sending email invitation from:', fromUserId);
     console.log('📧 To player:', player);
