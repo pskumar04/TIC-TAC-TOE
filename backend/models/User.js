@@ -23,6 +23,14 @@ const UserSchema = new mongoose.Schema({
   socketId: {
     type: String
   },
+  resetPasswordOTP: {
+    type: String,
+    default: null
+  },
+  resetPasswordOTPExpiry: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

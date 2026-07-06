@@ -3,6 +3,169 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+
+// Email configuration for sending OTP
+let transporter = null;
+
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    },
+    tls: {
+      rejectUnauthorized: false
+    },
+    family: 4
+  });
+}
+
+// ========== FORGOT PASSWORD - SEND OTP ==========
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email, captcha, userCaptcha } = req.body;
+
+    // Validate captcha
+    if (captcha.toLowerCase() !== userCaptcha.toLowerCase()) {
+      return res.status(400).json({ error: 'Invalid captcha' });
+    }
+
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found with this email' });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Save OTP to user with expiry (10 minutes)
+    user.resetPasswordOTP = otp;
+    user.resetPasswordOTPExpiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+    await user.save();
+
+    // Send OTP via email
+    if (transporter) {
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: user.email,
+        subject: 'TIC-TAC-TOE - Password Reset OTP 🔐',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; background-color: #f8f9fa; border-radius: 10px;">
+            <h1 style="color: #667eea; text-align: center;">🎮 TIC-TAC-TOE</h1>
+            <div style="background-color: white; padding: 25px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+              <h2 style="color: #333;">Password Reset Request</h2>
+              <p style="color: #555; font-size: 16px;">Hello ${user.name},</p>
+              <p style="color: #555; font-size: 16px;">You requested to reset your password. Use the OTP below to proceed:</p>
+              <div style="text-align: center; margin: 30px 0; padding: 15px; background: #f0f0f0; border-radius: 8px;">
+                <span style="font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #333;">
+                  ${otp}
+                </span>
+              </div>
+              <p style="color: #888; font-size: 14px;">This OTP is valid for 10 minutes. If you didn't request this, please ignore this email.</p>
+              <p style="color: #aaa; font-size: 12px; text-align: center; border-top: 1px solid #eee; padding-top: 15px;">
+                TIC-TAC-TOE by Satish Kumar | ${new Date().getFullYear()}
+              </p>
+            </div>
+          </div>
+        `
+      };
+
+      await transporter.sendMail(mailOptions);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'OTP sent to your email',
+      email: user.email 
+    });
+
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+});
+
+// ========== VERIFY OTP ==========
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if OTP exists and is valid
+    if (!user.resetPasswordOTP || user.resetPasswordOTP !== otp) {
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    // Check if OTP expired
+    if (Date.now() > user.resetPasswordOTPExpiry) {
+      return res.status(400).json({ error: 'OTP expired. Please request a new one.' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'OTP verified successfully' 
+    });
+
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ error: 'Failed to verify OTP' });
+  }
+});
+
+// ========== RESET PASSWORD ==========
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.resetPasswordOTP = null;
+    user.resetPasswordOTPExpiry = null;
+    await user.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Password reset successfully' 
+    });
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// ========== GENERATE CAPTCHA ==========
+router.get('/captcha', (req, res) => {
+  try {
+    // Generate 8-character captcha with letters and numbers
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let captcha = '';
+    for (let i = 0; i < 8; i++) {
+      captcha += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    res.json({ captcha });
+  } catch (error) {
+    console.error('Captcha generation error:', error);
+    res.status(500).json({ error: 'Failed to generate captcha' });
+  }
+});
 
 // Signup
 router.post('/signup', async (req, res) => {

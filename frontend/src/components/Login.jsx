@@ -63,6 +63,11 @@ const Login = () => {
               />
             </div>
 
+            {/* ADD THIS FORGOT PASSWORD LINK */}
+            <div className="forgot-password-link">
+              <Link to="/forgot-password">Forgot Password?</Link>
+            </div>
+
             <button type="submit" className="auth-btn" disabled={loading}>
               {loading ? 'Logging in...' : 'Login'}
             </button>

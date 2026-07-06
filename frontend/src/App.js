@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -8,8 +8,10 @@ import Home from './components/Home';
 import Modes from './components/Modes';
 import Login from './components/Login';
 import Signup from './components/Signup';
+import ForgotPassword from './components/ForgotPassword'; // ADD THIS
 import ComputerGame from './components/ComputerGame';
 import OnlineGame from './components/OnlineGame';
+import './App.css';
 
 function App() {
   return (
@@ -35,12 +37,10 @@ function App() {
   );
 }
 
-// Create a separate component to use hooks
 function AppContent() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Handle socket connection on user change
   useEffect(() => {
     if (user) {
       socketService.connect(user.id);
@@ -49,7 +49,6 @@ function AppContent() {
     }
   }, [user]);
 
-  // Override logout function to handle navigation
   const handleLogout = () => {
     logout();
     navigate('/');
@@ -61,6 +60,7 @@ function AppContent() {
       <Route path="/modes" element={<Modes />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} /> {/* ADD THIS */}
       <Route path="/computer-game" element={<ComputerGame />} />
       <Route path="/online-game/:gameId?" element={<OnlineGame />} />
       <Route path="*" element={<Navigate to="/" />} />
