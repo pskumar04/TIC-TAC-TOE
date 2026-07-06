@@ -1,44 +1,16 @@
 const Game = require('../models/Game');
 const User = require('../models/User');
-const nodemailer = require('nodemailer');
-const dns = require('dns');
+const sgMail = require('@sendgrid/mail');
 
-// Force DNS resolution to use IPv4
-dns.setDefaultResultOrder('ipv4first');
+// ========== EMAIL CONFIGURATION - SENDGRID ==========
+let emailConfigured = false;
 
-// ========== EMAIL CONFIGURATION - FORCED IPv4 ==========
-let transporter = null;
-
-if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-  transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    },
-    tls: {
-      rejectUnauthorized: false,
-      ciphers: 'SSLv3'
-    },
-    connectionTimeout: 30000,
-    greetingTimeout: 30000,
-    socketTimeout: 30000,
-    // Force IPv4
-    family: 4
-  });
-  
-  // Verify connection
-  transporter.verify((error, success) => {
-    if (error) {
-      console.error('❌ Email transporter verification failed:', error);
-    } else {
-      console.log('✅ Email transporter verified and ready!');
-    }
-  });
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  emailConfigured = true;
+  console.log('✅ SendGrid email configured!');
 } else {
-  console.log('⚠️ Email credentials not configured. Email features disabled.');
+  console.log('⚠️ SendGrid API key not configured. Email features disabled.');
 }
 
 
@@ -631,12 +603,11 @@ module.exports = (io) => {
     });
 
     // ========== SEND EMAIL INVITATION TO OFFLINE USER ==========
+    // ========== SEND EMAIL INVITATION - SENDGRID VERSION ==========
     socket.on('send-email-invitation', async ({ fromUserId, toUserId, gameLink }) => {
       try {
-        // console.log(`📧 Sending email invitation from ${fromUserId} to ${toUserId}`);
         console.log(`📧 SENDING EMAIL INVITATION from ${fromUserId} to ${toUserId}`);
 
-        // Validate inputs
         if (!fromUserId || !toUserId) {
           console.error('❌ Missing fromUserId or toUserId');
           socket.emit('email-invitation-failed', {
@@ -645,7 +616,6 @@ module.exports = (io) => {
           return;
         }
 
-        // Get users from database        
         const fromUser = await User.findById(fromUserId);
         const toUser = await User.findById(toUserId);
         
@@ -660,22 +630,18 @@ module.exports = (io) => {
         console.log(`📧 From: ${fromUser.name} (${fromUser.email})`);
         console.log(`📧 To: ${toUser.name} (${toUser.email})`);
 
-        // Check if transporter is configured
-        if (!transporter) {
-          console.error('❌ Email transporter not configured.');
+        if (!emailConfigured) {
+          console.error('❌ Email not configured.');
           socket.emit('email-invitation-failed', {
-            message: 'Email service not configured.'
+            message: 'Email service not configured'
           });
           return;
         }
 
-        // Send email
-        const mailOptions = {
-          from: process.env.EMAIL_USER,
+        const msg = {
           to: toUser.email,
-          // subject: `${fromUser.name} wants to play TIC-TAC-TOE with you!`,
+          from: process.env.EMAIL_FROM || 'noreply@tictactoe.com',
           subject: `${fromUser.name} wants to play TIC-TAC-TOE with you! 🎮`,
-
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa; border-radius: 10px;">
               <h1 style="color: #667eea; text-align: center;">🎮 TIC-TAC-TOE</h1>
@@ -689,8 +655,7 @@ module.exports = (io) => {
                 </p>
                 <div style="text-align: center; margin: 30px 0;">
                   <a href="${gameLink || 'https://tic-tac-toe-sooty-nu.vercel.app'}" 
-
-                     style="background: linear-gradient(45deg, #667eea, #764ba2); 
+                    style="background: linear-gradient(45deg, #667eea, #764ba2); 
                             color: white; 
                             padding: 14px 40px; 
                             text-decoration: none; 
@@ -713,11 +678,9 @@ module.exports = (io) => {
           `
         };
 
-        console.log(`📧 Sending email to ${toUser.email}...`);
-        const info = await transporter.sendMail(mailOptions);
-        console.log(`✅ Email sent successfully! Message ID: ${info.messageId}`);
-        console.log(`✅ Email sent to: ${info.accepted.join(', ')}`);
-
+        console.log(`📧 Sending email to ${toUser.email} via SendGrid...`);
+        const response = await sgMail.send(msg);
+        console.log(`✅ Email sent successfully! Response:`, response);
 
         socket.emit('email-invitation-sent', {
           to: toUser.name,
@@ -726,17 +689,10 @@ module.exports = (io) => {
 
       } catch (error) {
         console.error('❌ Error sending email invitation:', error);
-
-        let errorMessage = 'Failed to send email invitation';
-        if (error.code === 'EAUTH') {
-          errorMessage = 'Email authentication failed. Please check EMAIL_USER and EMAIL_PASS.';
-        } else if (error.code === 'ESOCKET' || error.code === 'ECONNECTION') {
-          errorMessage = 'Cannot connect to email server. Please check internet connection.';
-        } else if (error.message) {
-          errorMessage = error.message;
-        }
+        console.error('❌ Error details:', error.response?.body || error.message);
+        
         socket.emit('email-invitation-failed', {
-          message: error.message
+          message: error.response?.body?.errors?.[0]?.message || error.message || 'Failed to send email invitation'
         });
       }
     });
