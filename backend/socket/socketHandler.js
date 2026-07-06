@@ -1,29 +1,35 @@
 const Game = require('../models/Game');
 const User = require('../models/User');
 const nodemailer = require('nodemailer');
+const dns = require('dns');
 
-// Email configuration
+// Force DNS resolution to use IPv4
+dns.setDefaultResultOrder('ipv4first');
+
+// ========== EMAIL CONFIGURATION - FORCED IPv4 ==========
 let transporter = null;
 
-// Initialize transporter only if credentials exist
 if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
   transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 587,
-    secure: false, // true for 465, false for other ports
+    secure: false,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
     },
     tls: {
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
+      ciphers: 'SSLv3'
     },
     connectionTimeout: 30000,
     greetingTimeout: 30000,
-    socketTimeout: 30000
+    socketTimeout: 30000,
+    // Force IPv4
+    family: 4
   });
   
-  // Verify connection on startup
+  // Verify connection
   transporter.verify((error, success) => {
     if (error) {
       console.error('❌ Email transporter verification failed:', error);
